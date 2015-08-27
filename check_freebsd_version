@@ -51,8 +51,8 @@ curl -s http://$server/$fetchdir/pub.ssl -o /tmp/pub.ssl.$$
 latest_patch_release=`openssl rsautl -pubin -inkey /tmp/pub.ssl.$$ -verify < /tmp/latest.ssl.$$ | awk -F '|' '{print $4}'`
 
 # Clean up
-#rm -f /tmp/latest.ssl.$$
-#rm -f /tmp/pub.ssl.$$
+rm -f /tmp/latest.ssl.$$
+rm -f /tmp/pub.ssl.$$
 
 # Compare latest patch release with installed patch release
 if [ $latest_patch_release > $patch_release ]; then
