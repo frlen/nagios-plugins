@@ -2,7 +2,7 @@
 
 # This plugin checks whether there are updates available for the
 # installed version of FreeBSD.
-# Version 1.0
+# Version 1.1
 # Requires FreeBSD 10.0 or later.
 
 # Copyright (c) 2015, Fredrik Lennmark <fredrik@min-hemsida.net>
@@ -55,7 +55,7 @@ rm -f /tmp/latest.ssl.$$
 rm -f /tmp/pub.ssl.$$
 
 # Compare latest patch release with installed patch release
-if [ $latest_patch_release > $patch_release ]; then
+if [ $latest_patch_release -gt $patch_release ]; then
   echo "CRITICAL - FreeBSD update available!"
   exit 2
 else
