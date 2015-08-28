@@ -36,7 +36,7 @@ server=`host -t srv $address | head -1 | awk '{print $8}' | sed 's/.$//'`
 # Determine installed patch release
 installed_version=`freebsd-version -uk | tail -1`
 echo $installed_version | grep "p" > /dev/null
-if [ $? == 0 ]; then
+if [ $? -eq 0 ]; then
   patch_release=`echo $installed_version | awk -F 'p' '{print $2}'`
 else
   patch_release=0
