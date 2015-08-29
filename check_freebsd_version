@@ -46,9 +46,10 @@ fi
 release=`uname -r | awk -F '-' '{print $1"-"$2}'`
 arch=`uname -m`
 fetchdir=$release/$arch
-curl -s http://$server/$fetchdir/latest.ssl -o /tmp/latest.ssl.$$
-curl -s http://$server/$fetchdir/pub.ssl -o /tmp/pub.ssl.$$
+fetch -q http://$server/$fetchdir/latest.ssl -o /tmp/latest.ssl.$$
+fetch -q http://$server/$fetchdir/pub.ssl -o /tmp/pub.ssl.$$
 latest_patch_release=`openssl rsautl -pubin -inkey /tmp/pub.ssl.$$ -verify < /tmp/latest.ssl.$$ | awk -F '|' '{print $4}'`
+latest_release=$release-p$latest_patch_release
 
 # Clean up
 rm -f /tmp/latest.ssl.$$
@@ -56,9 +57,9 @@ rm -f /tmp/pub.ssl.$$
 
 # Compare latest patch release with installed patch release
 if [ $latest_patch_release -gt $patch_release ]; then
-  echo "CRITICAL - FreeBSD update available!"
+  echo "CRITICAL - FreeBSD update available: installed: $installed_version latest: $latest_release"
   exit 2
 else
-  echo "OK - No FreeBSD updates available"
+  echo "OK - No FreeBSD updates available - $installed_version is the latest available"
   exit 0
 fi
