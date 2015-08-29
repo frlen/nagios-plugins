@@ -2,7 +2,7 @@
 
 # This plugin checks whether there are updates available for the
 # installed version of FreeBSD.
-# Version 1.1
+# Version 1.2
 # Requires FreeBSD 10.0 or later.
 
 # Copyright (c) 2015, Fredrik Lennmark <fredrik@min-hemsida.net>
@@ -29,6 +29,14 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+# Changelog
+# 1.2 
+# - Using fetch instead of curl, more verbose output.
+#   By bjer https://github.com/bjer
+#
+# - Added check for userland and kernel version mismatch.
+#
+
 # Get a mirror to use
 address="_http._tcp.update.freebsd.org"
 server=`host -t srv $address | head -1 | awk '{print $8}' | sed 's/.$//'`
@@ -54,6 +62,15 @@ latest_release=$release-p$latest_patch_release
 # Clean up
 rm -f /tmp/latest.ssl.$$
 rm -f /tmp/pub.ssl.$$
+
+# Compare userland and kernel and report critical if mismatch
+userland_version=`freebsd-version -u | awk -F '-' '{print $1}'`
+kernel_version=`freebsd-version -k | awk -F '-' '{print $1}'`
+if [ "$userland_version" != "$kernel_version" ]; then
+  echo "CRITICAL - userland and kernel version mismatch"
+  echo "Userland: $userland_version, Kernel: $kernel_version"
+  exit 2
+fi
 
 # Compare latest patch release with installed patch release
 if [ $latest_patch_release -gt $patch_release ]; then
