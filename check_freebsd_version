@@ -2,7 +2,7 @@
 
 # This plugin checks whether there are updates available for the
 # installed version of FreeBSD.
-# Version 1.2
+# Version 1.3
 # Requires FreeBSD 10.0 or later.
 
 # Copyright (c) 2015, Fredrik Lennmark <fredrik@min-hemsida.net>
@@ -30,19 +30,33 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 # Changelog
-# 1.2 
+#
+# 1.3
+# - Added support for jails (only check userland version).
+#
+# 1.2
 # - Using fetch instead of curl, more verbose output.
 #   By bjer https://github.com/bjer
 #
 # - Added check for userland and kernel version mismatch.
 #
 
-# Get a mirror to use
-address="_http._tcp.update.freebsd.org"
-server=`host -t srv $address | head -1 | awk '{print $8}' | sed 's/.$//'`
+# Check if possibly a jail
+jail=0
+if [ ! `freebsd-version -k 2> /dev/null` ]; then
+  jail=1
+fi
 
 # Determine installed patch release
-installed_version=`freebsd-version -uk | tail -1`
+# If jail only check userland version
+if [ $jail -eq 0 ]; then
+  # Get a mirror to use
+  address="_http._tcp.update.freebsd.org"
+  server=`host -t srv $address | head -1 | awk '{print $8}' | sed 's/.$//'`
+  installed_version=`freebsd-version -uk | tail -1`
+else
+  installed_version=`freebsd-version -u`
+fi
 echo $installed_version | grep "p" > /dev/null
 if [ $? -eq 0 ]; then
   patch_release=`echo $installed_version | awk -F 'p' '{print $2}'`
@@ -54,22 +68,42 @@ fi
 release=`uname -r | awk -F '-' '{print $1"-"$2}'`
 arch=`uname -m`
 fetchdir=$release/$arch
-fetch -q http://$server/$fetchdir/latest.ssl -o /tmp/latest.ssl.$$
-fetch -q http://$server/$fetchdir/pub.ssl -o /tmp/pub.ssl.$$
-latest_patch_release=`openssl rsautl -pubin -inkey /tmp/pub.ssl.$$ -verify < /tmp/latest.ssl.$$ | awk -F '|' '{print $4}'`
-latest_release=$release-p$latest_patch_release
+if [ $jail -eq 0 ]; then
+  fetch -q http://$server/$fetchdir/latest.ssl -o /tmp/latest.ssl.$$
+  fetch -q http://$server/$fetchdir/pub.ssl -o /tmp/pub.ssl.$$
+  latest_patch_release=`openssl rsautl -pubin -inkey /tmp/pub.ssl.$$ -verify < /tmp/latest.ssl.$$ | awk -F '|' '{print $4}'`
+else
+  version=`echo $release | awk -F '-' '{print $1}'`
+  svn_address="http://svn.freebsd.org/base/releng/$version/sys/conf/newvers.sh"
+  branch=`fetch -qo - $svn_address | grep BRANCH | head -1 | awk -F '"' '{print $2}'`
+  if [ `echo $branch | grep 'p'` ]; then
+    latest_patch_release=`echo $branch | awk -F 'p' '{print $2}'`
+  else
+    latest_patch_release=0
+  fi
+fi
+
+if [ $latest_patch_release -ne 0 ]; then
+  latest_release=$release-p$latest_patch_release
+else
+  latest_release=$release
+fi
 
 # Clean up
-rm -f /tmp/latest.ssl.$$
-rm -f /tmp/pub.ssl.$$
+if [ $jail -eq 0 ]; then
+  rm -f /tmp/latest.ssl.$$
+  rm -f /tmp/pub.ssl.$$
+fi
 
 # Compare userland and kernel and report critical if mismatch
-userland_version=`freebsd-version -u | awk -F '-' '{print $1}'`
-kernel_version=`freebsd-version -k | awk -F '-' '{print $1}'`
-if [ "$userland_version" != "$kernel_version" ]; then
-  echo "CRITICAL - userland and kernel version mismatch"
-  echo "Userland: $userland_version, Kernel: $kernel_version"
-  exit 2
+if [ $jail -eq 0 ]; then
+  userland_version=`freebsd-version -u | awk -F '-' '{print $1}'`
+  kernel_version=`freebsd-version -k | awk -F '-' '{print $1}'`
+  if [ "$userland_version" != "$kernel_version" ]; then
+    echo "CRITICAL - userland and kernel version mismatch"
+    echo "Userland: $userland_version, Kernel: $kernel_version"
+    exit 2
+  fi
 fi
 
 # Compare latest patch release with installed patch release
