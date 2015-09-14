@@ -2,7 +2,7 @@
 
 # This plugin checks whether there are updates available for the
 # installed version of FreeBSD.
-# Version 1.3
+# Version 1.4
 # Requires FreeBSD 10.0 or later.
 
 # Copyright (c) 2015, Fredrik Lennmark <fredrik@min-hemsida.net>
@@ -31,6 +31,10 @@
 
 # Changelog
 #
+# 1.4
+# - Added support for pkg audit
+# - Added help section
+#
 # 1.3
 # - Added support for jails (only check userland version).
 #
@@ -47,70 +51,155 @@ if [ ! `freebsd-version -k 2> /dev/null` ]; then
   jail=1
 fi
 
-# Determine installed patch release
-# If jail only check userland version
-if [ $jail -eq 0 ]; then
-  # Get a mirror to use
-  address="_http._tcp.update.freebsd.org"
-  server=`host -t srv $address | head -1 | awk '{print $8}' | sed 's/.$//'`
-  installed_version=`freebsd-version -uk | tail -1`
-else
-  installed_version=`freebsd-version -u`
-fi
-echo $installed_version | grep "p" > /dev/null
-if [ $? -eq 0 ]; then
-  patch_release=`echo $installed_version | awk -F 'p' '{print $2}'`
-else
-  patch_release=0
+
+freebsdupdates=0
+pkgaudit=0
+pkg_audit_status=0
+latest_patch_release=0
+patch_release=0
+
+
+print_help ()
+{
+  echo "check_freebsd_version version 1.4"
+  echo
+  echo "Checks for updates to FreeBSD and runs pkg audit"
+  echo "Default is to check for both FreeBSD updates and run pkg audit"
+  echo
+  echo "Usage:"
+  echo "check_freebsd_version <options>"
+  echo
+  echo "Options:"
+  echo " -h"
+  echo "   Print this help section"
+  echo " -f"
+  echo "   Check for updates to FreeBSD"
+  echo " -p"
+  echo "   Run pkg audit"
+  echo
+
+  exit 0
+}
+
+while getopts fph o; do
+  case "$o" in
+      f)    freebsdupdates=1
+            ;;
+      p)    pkgaudit=1
+            ;;
+      h)    print_help
+            ;;
+  esac
+done
+
+# Default is to check both freebsd updates and pkg audit.
+if [ $# -eq 0 ]; then
+  freebsdupdates=1
+  pkgaudit=1
 fi
 
-# Determine latest patch release
-release=`uname -r | awk -F '-' '{print $1"-"$2}'`
-arch=`uname -m`
-fetchdir=$release/$arch
-if [ $jail -eq 0 ]; then
-  fetch -q http://$server/$fetchdir/latest.ssl -o /tmp/latest.ssl.$$
-  fetch -q http://$server/$fetchdir/pub.ssl -o /tmp/pub.ssl.$$
-  latest_patch_release=`openssl rsautl -pubin -inkey /tmp/pub.ssl.$$ -verify < /tmp/latest.ssl.$$ | awk -F '|' '{print $4}'`
-else
-  version=`echo $release | awk -F '-' '{print $1}'`
-  svn_address="http://svn.freebsd.org/base/releng/$version/sys/conf/newvers.sh"
-  branch=`fetch -qo - $svn_address | grep BRANCH | head -1 | awk -F '"' '{print $2}'`
-  if [ `echo $branch | grep 'p'` ]; then
-    latest_patch_release=`echo $branch | awk -F 'p' '{print $2}'`
+check_freebsd_updates ()
+{
+  # Determine installed patch release
+  # If jail only check userland version
+  if [ $jail -eq 0 ]; then
+    # Get a mirror to use
+    address="_http._tcp.update.freebsd.org"
+    server=`host -t srv $address | head -1 | awk '{print $8}' | sed 's/.$//'`
+    installed_version=`freebsd-version -uk | tail -1`
   else
-    latest_patch_release=0
+    installed_version=`freebsd-version -u`
   fi
-fi
-
-if [ $latest_patch_release -ne 0 ]; then
-  latest_release=$release-p$latest_patch_release
-else
-  latest_release=$release
-fi
-
-# Clean up
-if [ $jail -eq 0 ]; then
-  rm -f /tmp/latest.ssl.$$
-  rm -f /tmp/pub.ssl.$$
-fi
-
-# Compare userland and kernel and report critical if mismatch
-if [ $jail -eq 0 ]; then
-  userland_version=`freebsd-version -u | awk -F '-' '{print $1}'`
-  kernel_version=`freebsd-version -k | awk -F '-' '{print $1}'`
-  if [ "$userland_version" != "$kernel_version" ]; then
-    echo "CRITICAL - userland and kernel version mismatch"
-    echo "Userland: $userland_version, Kernel: $kernel_version"
-    exit 2
+  echo $installed_version | grep "p" > /dev/null
+  if [ $? -eq 0 ]; then
+    patch_release=`echo $installed_version | awk -F 'p' '{print $2}'`
+  else
+    patch_release=0
   fi
+
+  # Determine latest patch release
+  release=`uname -r | awk -F '-' '{print $1"-"$2}'`
+  arch=`uname -m`
+  fetchdir=$release/$arch
+  if [ $jail -eq 0 ]; then
+    fetch -q http://$server/$fetchdir/latest.ssl -o /tmp/latest.ssl.$$
+    if [ $? -ne 0 ]; then
+      echo "ERROR - Could not fetch latest.ssl from $server"
+      exit 2
+    fi
+    fetch -q http://$server/$fetchdir/pub.ssl -o /tmp/pub.ssl.$$
+    if [ $? -ne 0 ]; then
+      echo "ERROR - Could not fetch latest.ssl from $server"
+      exit 2
+    fi
+    latest_patch_release=`openssl rsautl -pubin -inkey /tmp/pub.ssl.$$ -verify < /tmp/latest.ssl.$$ | awk -F '|' '{print $4}'`
+  else
+    version=`echo $release | awk -F '-' '{print $1}'`
+    svn_address="http://svn.freebsd.org/base/releng/$version/sys/conf/newvers.sh"
+    branch=`fetch -qo - $svn_address | grep BRANCH | head -1 | awk -F '"' '{print $2}'`
+    if [ `echo $branch | grep 'p'` ]; then
+      latest_patch_release=`echo $branch | awk -F 'p' '{print $2}'`
+    else
+      latest_patch_release=0
+    fi
+  fi
+
+  if [ $latest_patch_release -ne 0 ]; then
+    latest_release=$release-p$latest_patch_release
+  else
+    latest_release=$release
+  fi
+
+  # Clean up
+  if [ $jail -eq 0 ]; then
+    rm -f /tmp/latest.ssl.$$
+    rm -f /tmp/pub.ssl.$$
+  fi
+
+  # Compare userland and kernel and report critical if mismatch
+  if [ $jail -eq 0 ]; then
+    userland_version=`freebsd-version -u | awk -F '-' '{print $1}'`
+    kernel_version=`freebsd-version -k | awk -F '-' '{print $1}'`
+    if [ "$userland_version" != "$kernel_version" ]; then
+      echo "CRITICAL - userland and kernel version mismatch"
+      echo "Userland: $userland_version, Kernel: $kernel_version"
+      exit 2
+    fi
+  fi
+}
+
+check_pkgaudit ()
+{
+  audit_output=`/usr/sbin/pkg audit`
+  if [ $? -ne 0 ]; then
+    pkg_audit_status=1
+    echo "CRITICAL - The following packages are vulnerable:"
+    echo "$audit_output" | grep "is vulnerable:" | sed 's/is vulnerable://'
+  fi
+}
+
+if [ $freebsdupdates -eq 1 ]; then
+  check_freebsd_updates
+fi
+if [ $pkgaudit -eq 1 ]; then
+  check_pkgaudit
 fi
 
 # Compare latest patch release with installed patch release
-if [ $latest_patch_release -gt $patch_release ]; then
+if [ $latest_patch_release -gt $patch_release ] && [ $freebsdupdates -eq 1 ]; then
+  if [ $pkg_audit_status -eq 1 ]; then
+    echo
+  fi
   echo "CRITICAL - FreeBSD update available: installed: $installed_version latest: $latest_release"
   exit 2
+elif [ $pkg_audit_status -ne 0 ]; then
+  exit 2
 else
-  echo "OK - No FreeBSD updates available - $installed_version is the latest available"
+  if [ $freebsdupdates -eq 1 ]; then
+    echo "OK - No FreeBSD updates available - $installed_version is the latest available"
+  fi
+  if [ $pkgaudit -eq 1 ]; then
+    echo "OK - No vulnerable packages"
+  fi
   exit 0
 fi
