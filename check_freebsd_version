@@ -45,13 +45,6 @@
 # - Added check for userland and kernel version mismatch.
 #
 
-# Check if possibly a jail
-jail=0
-if [ ! `freebsd-version -k 2> /dev/null` ]; then
-  jail=1
-fi
-
-
 freebsdupdates=0
 pkgaudit=0
 pkg_audit_status=0
@@ -97,6 +90,13 @@ if [ $# -eq 0 ]; then
   freebsdupdates=1
   pkgaudit=1
 fi
+
+# Check if possibly a jail
+jail=0
+if [ ! `freebsd-version -k 2> /dev/null` ]; then
+  jail=1
+fi
+
 
 check_freebsd_updates ()
 {
