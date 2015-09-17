@@ -2,7 +2,7 @@
 
 # This plugin checks whether there are updates available for the
 # installed version of FreeBSD.
-# Version 1.4
+# Version 1.4.1
 # Requires FreeBSD 10.0 or later.
 
 # Copyright (c) 2015, Fredrik Lennmark <fredrik@min-hemsida.net>
@@ -31,6 +31,9 @@
 
 # Changelog
 #
+# 1.4.1
+# - Reformated output to better follow the Nagios plugin guidelines.
+#
 # 1.4
 # - Added support for pkg audit
 # - Added help section
@@ -54,7 +57,7 @@ patch_release=0
 
 print_help ()
 {
-  echo "check_freebsd_version version 1.4"
+  echo "check_freebsd_version version 1.4.1"
   echo
   echo "Checks for updates to FreeBSD and runs pkg audit"
   echo "Default is to check for both FreeBSD updates and run pkg audit"
@@ -173,7 +176,8 @@ check_pkgaudit ()
   audit_output=`/usr/sbin/pkg audit`
   if [ $? -ne 0 ]; then
     pkg_audit_status=1
-    echo "CRITICAL - The following packages are vulnerable:"
+    echo "CRITICAL - Vulnerable packages found."
+    echo "The following packages has vulnerabilities:"
     echo "$audit_output" | grep "is vulnerable:" | sed 's/is vulnerable://'
   fi
 }
@@ -190,13 +194,15 @@ if [ $latest_patch_release -gt $patch_release ] && [ $freebsdupdates -eq 1 ]; th
   if [ $pkg_audit_status -eq 1 ]; then
     echo
   fi
-  echo "CRITICAL - FreeBSD update available: installed: $installed_version latest: $latest_release"
+  echo "CRITICAL - FreeBSD update available."
+  echo "Installed: $installed_version, latest: $latest_release"
   exit 2
 elif [ $pkg_audit_status -ne 0 ]; then
   exit 2
 else
   if [ $freebsdupdates -eq 1 ]; then
-    echo "OK - No FreeBSD updates available - $installed_version is the latest available"
+    echo "OK - No FreeBSD updates available."
+    echo "$installed_version is the latest available"
   fi
   if [ $pkgaudit -eq 1 ]; then
     echo "OK - No vulnerable packages"
