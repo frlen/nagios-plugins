@@ -173,6 +173,11 @@ check_freebsd_updates ()
 
 check_pkgaudit ()
 {
+  pkg_audit_db="/var/db/pkg/vuln.xml"
+  if [ ! -f "$pkg_audit_db" ]; then
+    echo "UNKNOWN - $pkg_audit_db not found. Run '/usr/sbin/pkg audit -F' first."
+    exit 3
+  fi
   audit_output=`/usr/sbin/pkg audit`
   if [ $? -ne 0 ]; then
     pkg_audit_status=1
