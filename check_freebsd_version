@@ -138,8 +138,8 @@ check_freebsd_updates ()
     latest_patch_release=`openssl rsautl -pubin -inkey /tmp/pub.ssl.$$ -verify < /tmp/latest.ssl.$$ | awk -F '|' '{print $4}'`
   else
     version=`echo $release | awk -F '-' '{print $1}'`
-    svn_address="http://svn.freebsd.org/base/releng/$version/sys/conf/newvers.sh"
-    branch=`fetch -qo - $svn_address | grep BRANCH | head -1 | awk -F '"' '{print $2}'`
+    cgit_address="https://cgit.freebsd.org/src/plain/sys/conf/newvers.sh?h=releng/$version"
+    branch=`fetch -qo - $cgit_address | grep 'BRANCH=' | head -1 | awk -F '"' '{print $2}'`
     if [ `echo $branch | grep 'p'` ]; then
       latest_patch_release=`echo $branch | awk -F 'p' '{print $2}'`
     else
